@@ -127,9 +127,10 @@ inline __device__ void compute_dq_dk_dv_1colblock(const Params &params, const in
     const index_t row_offset_lse = bidh * params.total_q + binfo.q_offset(params.seqlen_q, 1, bidb)
         + (m_block_max - 1) * kBlockM;
 
-
-    const index_t row_offset_dpsum = (bidb * params.h + bidh) * params.seqlen_q_rounded
-        + (m_block_max - 1) * kBlockM;
+    // const index_t row_offset_dpsum = (bidb * params.h + bidh) * params.seqlen_q_rounded
+    //     + (m_block_max - 1) * kBlockM;
+    const index_t row_offset_dpsum = bidh * (params.total_q + 128 * params.b) + binfo.q_offset(params.seqlen_q_rounded, 1, bidb)
+        + 128 * bidb + (m_block_max - 1) * kBlockM;
 
     Tensor gQ = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.q_ptr) + row_offset_q),
                             Shape<Int<kBlockM>, Int<kHeadDim>>{},
