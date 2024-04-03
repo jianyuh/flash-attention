@@ -1000,7 +1000,6 @@ mha_varlen_bwd(const at::Tensor &dout,  // total_q x num_heads, x head_size
                const bool deterministic,
                c10::optional<at::Generator> gen_,
                c10::optional<at::Tensor> &rng_state) {
-    TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
 
     #ifdef FLASHATTENTION_DISABLE_BACKWARD
         TORCH_CHECK(false, "This flash attention build does not support backward.");
@@ -1181,6 +1180,7 @@ mha_varlen_bwd(const at::Tensor &dout,  // total_q x num_heads, x head_size
                      window_size_right,
                      deterministic);
     params.dq_accum_split_stride = !deterministic ? 0 : dq_accum.stride(0);
+    params.total_q = total_q;
 
     auto launch = &run_mha_bwd;
 
