@@ -836,7 +836,6 @@ mha_varlen_bwd(const at::Tensor &dout,  // total_q x num_heads, x head_size
                int window_size_right,
                c10::optional<at::Generator> gen_,
                c10::optional<at::Tensor> &rng_state) {
-    TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
 
     if (is_causal) { window_size_right = 0; }
     auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -1003,6 +1002,7 @@ mha_varlen_bwd(const at::Tensor &dout,  // total_q x num_heads, x head_size
                      softmax_scale,
                      window_size_left,
                      window_size_right);
+    params.total_q = total_q;
 
     auto launch = &run_mha_bwd;
     // launch(params, stream, /*configure=*/true);
