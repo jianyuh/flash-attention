@@ -113,7 +113,9 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
             }
             const index_t row_offset_o = binfo.q_offset(params.o_batch_stride, params.o_row_stride, bidb)
                 + m_block * kBlockM * params.o_row_stride + bidh * params.o_head_stride;
-            const index_t row_offset_lse = (bidb * params.h + bidh) * params.seqlen_q + m_block * kBlockM;
+            // const index_t row_offset_lse = (bidb * params.h + bidh) * params.seqlen_q + m_block * kBlockM;
+            const index_t row_offset_lse = bidh * params.total_q + binfo.q_offset(params.seqlen_q, 1, bidb)
+                + m_block * kBlockM;
             Tensor gO = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.o_ptr) + row_offset_o),
                                     Shape<Int<kBlockM>, Int<kHeadDim>>{},
                                     make_stride(params.o_row_stride, _1{}));
@@ -533,7 +535,9 @@ inline __device__ void compute_attn_1rowblock(const Params &params, const int bi
 
     const index_t row_offset_o = binfo.q_offset(params.o_batch_stride, params.o_row_stride, bidb)
         + m_block * kBlockM * params.o_row_stride + bidh * params.o_head_stride;
-    const index_t row_offset_lse = (bidb * params.h + bidh) * params.seqlen_q + m_block * kBlockM;
+    // const index_t row_offset_lse = (bidb * params.h + bidh) * params.seqlen_q + m_block * kBlockM;
+    const index_t row_offset_lse = bidh * params.total_q + binfo.q_offset(params.seqlen_q, 1, bidb)
+        + m_block * kBlockM;
     Tensor gO = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.o_ptr) + row_offset_o),
                             Shape<Int<kBlockM>, Int<kHeadDim>>{},
                             make_stride(params.o_row_stride, _1{}));

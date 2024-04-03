@@ -197,6 +197,7 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
             if (params.num_splits <= 1 && !force_split_kernel) {  // If we don't set it num_splits == 0
                 run_mha_fwd_<elem_type, kHeadDim>(params, stream);
             } else {
+                TORCH_CHECK(false, "softmax_lse layout not fixed in the splitKV path yet.")
                 run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim>(params, stream);
             }
         });
@@ -257,6 +258,7 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
         int window_size_right,
         const bool return_softmax,
         c10::optional<at::Generator> gen_) {
+    TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
 
     auto dprops = at::cuda::getCurrentDeviceProperties();
     // bool is_sm75 = dprops->major == 7 && dprops->minor == 5;
@@ -524,7 +526,7 @@ mha_varlen_fwd(const at::Tensor &q,  // total_q x num_heads x head_size, total_q
 
     auto opts = q.options();
 
-    auto softmax_lse = torch::empty({batch_size, num_heads, max_seqlen_q}, opts.dtype(at::kFloat));
+    auto softmax_lse = torch::empty({num_heads, total_q}, opts.dtype(at::kFloat));
     at::Tensor p;
     // Only return softmax if there's dropout to reduce compilation time
     if (return_softmax) {
@@ -554,6 +556,7 @@ mha_varlen_fwd(const at::Tensor &q,  // total_q x num_heads x head_size, total_q
                      softmax_scale,
                      window_size_left,
                      window_size_right);
+    params.total_q = total_q;
 
     // number of times random will be generated per thread, to offset philox counter in thc random
     // state
@@ -623,6 +626,7 @@ mha_bwd(const at::Tensor &dout,  // batch_size x seqlen_q x num_heads, x head_si
         int window_size_right,
         c10::optional<at::Generator> gen_,
         c10::optional<at::Tensor> &rng_state) {
+    TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
 
     if (is_causal) { window_size_right = 0; }
     auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -832,6 +836,7 @@ mha_varlen_bwd(const at::Tensor &dout,  // total_q x num_heads, x head_size
                int window_size_right,
                c10::optional<at::Generator> gen_,
                c10::optional<at::Tensor> &rng_state) {
+    TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
 
     if (is_causal) { window_size_right = 0; }
     auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -1053,6 +1058,7 @@ mha_fwd_kvcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
                 bool is_rotary_interleaved,   // if true, rotary combines indices 0 & 1, else indices 0 & rotary_dim / 2
                 int num_splits
                 ) {
+    TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
 
     auto dprops = at::cuda::getCurrentDeviceProperties();
     // bool is_sm75 = dprops->major == 7 && dprops->minor == 5;
