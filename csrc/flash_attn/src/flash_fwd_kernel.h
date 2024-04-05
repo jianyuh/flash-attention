@@ -632,7 +632,15 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
             + m_block * kBlockM * params.o_row_stride + bidh * params.o_head_stride;
         const index_t row_offset_oaccum = (((n_split_idx * params.b + bidb) * params.h + bidh) * params.seqlen_q
             + m_block * kBlockM) * params.d_rounded;
+
         const index_t row_offset_lseaccum = ((n_split_idx * params.b + bidb) * params.h + bidh) * params.seqlen_q + m_block * kBlockM;
+        // const index_t row_offset_lseaccum = ((n_split_idx * params.h + bidh) * params.b + bidb) * params.seqlen_q + m_block * kBlockM;
+        // const index_t row_offset_lseaccum = bidh * params.total_q + (n_split_idx * params.b + bidb) * params.seqlen_q + m_block * kBlockM;
+        // {params.num_splits, num_heads, total_q}
+        // const index_t row_offset_lseaccum = n_split_idx * params.h * params.total_q + bidh * params.total_q +  bidb * params.seqlen_q + m_block * kBlockM;
+        // {num_heads, params.num_splits, total_q}
+        // const index_t row_offset_lseaccum = params.h * params.num_splits * params.total_q + bidh * params.num_splits * params.total_q + (n_split_idx * params.b + bidb) * params.seqlen_q + m_block * kBlockM;
+
         Tensor gOaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementO *>(Split ? params.oaccum_ptr : params.o_ptr) + (Split ? row_offset_oaccum : row_offset_o)),
                                       Shape<Int<kBlockM>, Int<kHeadDim>>{},
                                      make_stride(Split ? kHeadDim : params.o_row_stride, _1{}));
@@ -1084,6 +1092,10 @@ inline __device__ void compute_attn_1rowblock_splitkv(const Params &params, cons
     const index_t row_offset_oaccum = (((n_split_idx * params.b + bidb) * params.h + bidh) * params.seqlen_q
                                          + m_block * kBlockM) * params.d_rounded;
     const index_t row_offset_lseaccum = ((n_split_idx * params.b + bidb) * params.h + bidh) * params.seqlen_q + m_block * kBlockM;
+    // const index_t row_offset_lseaccum = ((n_split_idx * params.h + bidh) * params.b + bidb) * params.seqlen_q + m_block * kBlockM;
+    // const index_t row_offset_lseaccum = bidh * params.total_q + (n_split_idx * params.b + bidb) * params.seqlen_q + m_block * kBlockM;
+    // const index_t row_offset_lseaccum = n_split_idx * params.h * params.total_q + bidh * params.total_q +  bidb * params.seqlen_q + m_block * kBlockM;
+    // const index_t row_offset_lseaccum = params.h * params.num_splits * params.total_q + bidh * params.num_splits * params.total_q + (n_split_idx * params.b + bidb) * params.seqlen_q + m_block * kBlockM;
 
     Tensor gOaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementO *>(Split ? params.oaccum_ptr : params.o_ptr) + (Split ? row_offset_oaccum : row_offset_o)),
                                  Shape<Int<kBlockM>, Int<kHeadDim>>{},
@@ -1192,11 +1204,35 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     const int bidx = blockIdx.x;
 
     const index_t row_offset_lse = bidx * kBlockM;
+    // const index_t row_offset_lseaccum = n_split_idx * params.h * params.total_q + bidh * params.total_q +  bidb * params.seqlen_q + m_block * kBlockM;
     Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lseaccum_ptr) + row_offset_lse),
                                    Shape<Int<kMaxSplits>, Int<kBlockM>>{},
-                                   make_stride(params.b * params.h * params.seqlen_q, _1{}));
-    Tensor gLSE = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr) + row_offset_lse),
-                              Shape<Int<kBlockM>>{}, Stride<_1>{});
+                                   make_stride(params.h * params.b * params.seqlen_q, _1{}));
+
+
+    // Tensor gLSE = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr) + row_offset_lse),
+    //                           Shape<Int<kBlockM>>{}, Stride<_1>{});
+
+    // Remap row_offset_lse to {bidb, bidh, q_offset}
+    const index_t bidb = row_offset_lse / (params.seqlen_q * params.h);
+    const index_t bidh = (row_offset_lse / params.seqlen_q) % params.h;
+    const index_t q_offset = row_offset_lse % params.seqlen_q;
+
+    // (num_heads, batch_size, seqlen_q)
+    const index_t row_offset_lse1 = bidh * params.total_q + bidb * params.seqlen_q + q_offset;
+    Tensor gLSE1 = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr) + row_offset_lse1),
+                               Shape<Int<kBlockM>>{}, Stride<_1>{});
+
+    // (batch_size, num_heads, seqlen_q)
+    // const index_t row_offset_lse2 = bidb * params.h * params.seqlen_q + bidh * params.seqlen_q + q_offset;
+    const index_t row_offset_lse2 = (bidh + 1) * params.total_q + bidb * params.seqlen_q + 0;
+    Tensor gLSE2 = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr) + row_offset_lse2),
+                               Shape<Int<kBlockM>>{}, Stride<_1>{});
+
+    // Read the LSE values from gmem and store them in shared memory, then tranpose them.
+
+
+
     constexpr int kNLsePerThread = (kMaxSplits * kBlockM + kNThreads - 1) / kNThreads;
 
     // Read the LSE values from gmem and store them in shared memory, then tranpose them.
@@ -1244,7 +1280,17 @@ inline __device__ void combine_attn_seqk_parallel(const Params &params) {
     // lse_logsum is log(0.0) = -INFINITY and we get NaN when we do lse_accum(l) - lse_logsum.
     ElementAccum lse_logsum = (lse_sum == 0.f || lse_sum != lse_sum) ? INFINITY : logf(lse_sum) + lse_max;
     // if (bidx == 0 && tidx < 32) { printf("tidx = %d, lse = %f, lse_max = %f, lse_logsum = %f\n", tidx, lse_accum(0), lse_max, lse_logsum); }
-    if (tidx % kRowsPerLoadTranspose == 0 && tidx / kRowsPerLoadTranspose < kBlockM) { gLSE(tidx / kRowsPerLoadTranspose) = lse_logsum; }
+    // if (tidx % kRowsPerLoadTranspose == 0 && tidx / kRowsPerLoadTranspose < kBlockM) { gLSE(tidx / kRowsPerLoadTranspose) = lse_logsum; }
+    if (tidx % kRowsPerLoadTranspose == 0 && tidx / kRowsPerLoadTranspose < kBlockM) {
+        const index_t seq_q_idx = q_offset + (tidx / kRowsPerLoadTranspose);
+        if (seq_q_idx < params.seqlen_q) {
+            gLSE1(tidx / kRowsPerLoadTranspose) = lse_logsum;
+        } else {
+            gLSE2(seq_q_idx - params.seqlen_q) = lse_logsum;
+        }
+        // gLSE(tid / kRowsPerLoadTranspose) = lse_logsum;
+    }
+
     // Store the scales exp(lse - lse_logsum) in shared memory.
     #pragma unroll
     for (int l = 0; l < kNLsePerThread; ++l) {
