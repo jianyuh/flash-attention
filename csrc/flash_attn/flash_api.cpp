@@ -378,6 +378,7 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
     // Faster to transpose q from (b, 1, (nheads_kv ngroups), d) to (b, ngroups, nheads_kv, d) in this case
     // H/t Daniel Haziza
     const int seqlenq_ngroups_swapped = seqlen_q == 1 && num_heads > num_heads_k && window_size_left < 0 && window_size_right < 0 && p_dropout == 0.f && head_size_og % 8 == 0 && !alibi_slopes_.has_value();
+    printf("seqlenq_ngroups_swapped: %d\n", seqlenq_ngroups_swapped);
     if (seqlenq_ngroups_swapped) {
         const int ngroups = num_heads / num_heads_k;
         q = q.reshape({batch_size, num_heads_k, ngroups, head_size_og}).transpose(1, 2);
@@ -454,7 +455,6 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
                      window_size_right);
     params.total_q = total_q;
 
-
     set_params_splitkv(params, batch_size, num_heads,
                        head_size, seqlen_k, seqlen_q,
                        head_size_rounded, p_dropout, /*num_splits*/0, dprops, opts);
@@ -497,8 +497,8 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
         out = out.transpose(1, 2).reshape({batch_size, 1, num_heads_k * seqlen_q, head_size_og});
         out_padded = out_padded.transpose(1, 2).reshape({batch_size, 1, num_heads_k * seqlen_q, head_size_og});
         q_padded = q_padded.transpose(1, 2).reshape({batch_size, 1, num_heads_k * seqlen_q, head_size_og});
-        // softmax_lse = softmax_lse.reshape({num_heads_k, total_q, 1});
-        softmax_lse = softmax_lse.reshape({batch_size, num_heads_k * seqlen_q, 1});
+        softmax_lse = softmax_lse.reshape({num_heads_k, total_q, 1});
+        // softmax_lse = softmax_lse.reshape({batch_size, num_heads_k * seqlen_q, 1});
     }
     return {out, q_padded, k_padded, v_padded, out_padded, softmax_lse, p, rng_state};
 }
@@ -996,7 +996,7 @@ mha_varlen_bwd(const at::Tensor &dout,  // total_q x num_heads, x head_size
                const at::Tensor &k,   // total_k x num_heads_k x head_size, total_k := \sum_{i=0}^{b} s_i
                const at::Tensor &v,   // total_k x num_heads_k x head_size, total_k := \sum_{i=0}^{b} s_i
                const at::Tensor &out,   // total_q x num_heads x head_size
-               const at::Tensor &softmax_lse,     // b x h x s   softmax logsumexp
+               const at::Tensor &softmax_lse,     // h x b x s   softmax logsumexp
                c10::optional<at::Tensor> &dq_,   // total_q x num_heads x head_size, total_q := \sum_{i=0}^{b} s_i
                c10::optional<at::Tensor> &dk_,   // total_k x num_heads_k x head_size, total_k := \sum_{i=0}^{b} s_i
                c10::optional<at::Tensor> &dv_,   // total_k x num_heads_k x head_size, total_k := \sum_{i=0}^{b} s_i
@@ -1321,6 +1321,7 @@ mha_fwd_kvcache(at::Tensor &q,                 // batch_size x seqlen_q x num_he
     // Faster to transpose q from (b, 1, (nheads_kv ngroups), d) to (b, ngroups, nheads_kv, d) in this case
     // H/t Daniel Haziza
     const int seqlenq_ngroups_swapped = seqlen_q == 1 && num_heads > num_heads_k && window_size_left < 0 && window_size_right < 0 && head_size_og % 8 == 0 && !alibi_slopes_.has_value();
+    printf("seqlenq_ngroups_swapped: %d\n", seqlenq_ngroups_swapped);
     if (seqlenq_ngroups_swapped) {
         const int ngroups = num_heads / num_heads_k;
         q = q.reshape({batch_size, num_heads_k, ngroups, head_size_og}).transpose(1, 2);

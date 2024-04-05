@@ -2250,10 +2250,21 @@ def test_flash_attn_bwd_transpose(seqlen, d, causal, dtype):
         torch.randn([batch_size, seqlen, nheads, d], dtype=dtype, device="cuda", requires_grad=True)
         for _ in range(3)
     ]
+
     out = rearrange(flash_attn_func(q, k, v, causal=causal), "b s ... -> s b ...")
     # So g is not contiguous
     g = torch.randn(seqlen, 2 * batch_size, nheads, d, dtype=dtype, device="cuda")[:, ::2]
     out.backward(g)
+
+    # out = flash_attn_func(q, k, v, causal=causal)
+    # # out = rearrange(flash_attn_func(q, k, v, causal=causal), "b s ... -> s b ...")
+    # # So g is contiguous
+    # # g = torch.randn(seqlen, batch_size, nheads, d, dtype=dtype, device="cuda")
+    # g = torch.randn(batch_size, seqlen, nheads, d, dtype=dtype, device="cuda")
+    # # g = torch.randn_like(out)
+    # # g = torch.randn_like(out)
+    # out.backward(g)
+
     q_pt = q.detach().clone().requires_grad_(True)
     k_pt = k.detach().clone().requires_grad_(True)
     v_pt = v.detach().clone().requires_grad_(True)
