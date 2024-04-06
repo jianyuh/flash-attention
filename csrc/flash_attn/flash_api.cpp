@@ -222,6 +222,7 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
                 printf("Enter run_mha_fwd_\n");
                 run_mha_fwd_<elem_type, kHeadDim>(params, stream);
             } else {
+                // TORCH_CHECK(false, "softmax_lse layout not fixed in the splitKV path yet.")
                 printf("Enter run_mha_fwd_splitkv_dispatch\n");
                 // TORCH_CHECK(false, "softmax_lse layout not fixed in the splitKV path yet.")
                 run_mha_fwd_splitkv_dispatch<elem_type, kHeadDim>(params, stream);
@@ -289,8 +290,12 @@ void set_params_splitkv(Flash_fwd_params &params, const int batch_size,
             params.num_splits = num_splits_heuristic(batch_size * num_heads * num_m_blocks, dprops->multiProcessorCount, num_n_blocks, 128);
         }
         if (params.num_splits > 1) {
-            at::Tensor softmax_lse_accum = torch::empty({params.num_splits, batch_size, num_heads, max_seqlen_q}, opts.dtype(at::kFloat));
-            at::Tensor out_accum = torch::empty({params.num_splits, batch_size, num_heads, max_seqlen_q, head_size_rounded}, opts.dtype(at::kFloat));
+            printf("params.total_q: %d, params.num_splits: %d, max_seqlen_q: %d, batch_size: %d\n", params.total_q, params.num_splits, max_seqlen_q, batch_size);
+
+            // at::Tensor softmax_lse_accum = torch::empty({params.num_splits, batch_size, num_heads, max_seqlen_q}, opts.dtype(at::kFloat));
+            at::Tensor softmax_lse_accum = torch::empty({params.num_splits, num_heads, params.total_q}, opts.dtype(at::kFloat));
+            // at::Tensor out_accum = torch::empty({params.num_splits, batch_size, num_heads, max_seqlen_q, head_size_rounded}, opts.dtype(at::kFloat));
+            at::Tensor out_accum = torch::empty({params.num_splits, num_heads, batch_size, max_seqlen_q, head_size_rounded}, opts.dtype(at::kFloat));
             params.softmax_lseaccum_ptr = softmax_lse_accum.data_ptr();
             params.oaccum_ptr = out_accum.data_ptr();
         }
@@ -330,6 +335,7 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x head_size
         int window_size_right,
         const bool return_softmax,
         c10::optional<at::Generator> gen_) {
+    // TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
     printf("Enter mha_fwd!\n");
     // TORCH_CHECK(false, "softmax_lse layout not fixed in this function yet.")
 

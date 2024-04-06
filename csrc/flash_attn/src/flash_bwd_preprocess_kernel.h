@@ -79,7 +79,10 @@ inline __device__ void compute_dot_do_o(const Params &params) {
         + m_block * kBlockM * params.o_row_stride + bidh * params.o_head_stride;
     const index_t row_offset_dq_accum = binfo.q_offset(params.seqlen_q_rounded * params.h * params.d_rounded, params.h * params.d_rounded, bidb)
         + (m_block * kBlockM + (params.cu_seqlens_q == nullptr ? 0 : 128 * bidb)) * params.h * params.d_rounded + bidh * params.d_rounded;
-    const index_t row_offset_dpsum = (bidb * params.h + bidh) * params.seqlen_q_rounded + m_block * kBlockM;
+    // const index_t row_offset_dpsum = (bidb * params.h + bidh) * params.seqlen_q_rounded + m_block * kBlockM;
+    const index_t row_offset_dpsum = bidh * (binfo.sum_s_q == -1 ? params.seqlen_q_rounded * params.b : params.total_q + 128 * params.b)
+        + binfo.q_offset(params.seqlen_q_rounded, 1, bidb) + (binfo.sum_s_q == -1 ? 0 : 128 * bidb)
+        + m_block * kBlockM;
 
     Tensor gdO = make_tensor(make_gmem_ptr(reinterpret_cast<Element *>(params.do_ptr) + row_offset_do),
                              Shape<Int<kBlockM>, Int<kHeadDim>>{},
