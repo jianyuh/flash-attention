@@ -127,13 +127,9 @@ inline __device__ void compute_dot_do_o(const Params &params) {
         + m_block * kBlockM * params.do_row_stride + bidh * params.do_head_stride;
     const index_t row_offset_o = binfo.q_offset(params.o_batch_stride, params.o_row_stride, bidb)
         + m_block * kBlockM * params.o_row_stride + bidh * params.o_head_stride;
-
     const index_t row_offset_dq_accum = binfo.q_offset(params.seqlen_q_rounded * params.h * params.d_rounded, params.h * params.d_rounded, bidb)
         + (m_block * kBlockM + (params.cu_seqlens_q == nullptr ? 0 : 128 * bidb)) * params.h * params.d_rounded + bidh * params.d_rounded;
 
-    // const index_t row_offset_dpsum = (bidb * params.h + bidh) * params.seqlen_q_rounded + m_block * kBlockM;
-    // const index_t row_offset_dpsum = bidh * (params.total_q + 128 * params.b) + binfo.q_offset(params.seqlen_q_rounded, 1, bidb)
-    //     + 128 * bidb + m_block * kBlockM;
     const index_t row_offset_dpsum = bidh * (binfo.sum_s_q == -1 ? params.seqlen_q_rounded * params.b : params.total_q + 128 * params.b)
         + binfo.q_offset(params.seqlen_q_rounded, 1, bidb) + (binfo.sum_s_q == -1 ? 0 : 128 * bidb)
         + m_block * kBlockM;
@@ -476,12 +472,6 @@ inline __device__ void compute_dq_dk_dv_1colblock(const Params &params, const in
     //     + (m_block_max - 1) * kBlockM;
     const index_t row_offset_lse = bidh * params.total_q + binfo.q_offset(params.seqlen_q, 1, bidb)
         + (m_block_max - 1) * kBlockM;
-    // const index_t row_offset_dpsum = (bidb * params.h + bidh) * params.seqlen_q_rounded
-    //     + (m_block_max - 1) * kBlockM;
-    // const index_t row_offset_dpsum = bidh * (params.total_q + 128 * params.b) + binfo.q_offset(params.seqlen_q_rounded, 1, bidb)
-    //     + 128 * bidb + (m_block_max - 1) * kBlockM;
-    // const index_t row_offset_dpsum = bidh * (params.b * params.seqlen_q_rounded) + params.seqlen_q_rounded * bidb
-    //     + (m_block_max - 1) * kBlockM;
     const index_t row_offset_dpsum = bidh * (binfo.sum_s_q == -1 ? params.b * params.seqlen_q_rounded : params.total_q + 128 * params.b)
         + binfo.q_offset(params.seqlen_q_rounded, 1, bidb) + (binfo.sum_s_q == -1 ? 0 : 128 * bidb)
         + (m_block_max - 1) * kBlockM;
